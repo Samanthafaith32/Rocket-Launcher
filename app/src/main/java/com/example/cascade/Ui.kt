@@ -1,5 +1,9 @@
 package com.example.cascade
 
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.text.format.DateFormat
 import android.view.Window
 import androidx.activity.compose.BackHandler
@@ -30,8 +34,10 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -95,10 +101,13 @@ fun LauncherApp(vm: LauncherViewModel, window: Window) {
             else -> 0f
         }
         val dim by animateFloatAsState(dimTarget, tween(450), label = "dim")
+        // Themes with a built-in gradient can paint it instead of the system wallpaper.
+        val backdrop = if (vm.backdrop) theme.backdrop else null
 
         Box(
             Modifier
                 .fillMaxSize()
+                .then(if (backdrop != null) Modifier.background(Brush.verticalGradient(backdrop)) else Modifier)
                 .drawBehind { drawRect(theme.scrim.copy(alpha = dim)) }
                 .pointerInput(Unit) {
                     detectTapGestures(
@@ -140,6 +149,7 @@ private fun Home(vm: LauncherViewModel, theme: LTheme) {
                                 "Tap A–Z, pick a letter, then long-press an app to add it here.",
                                 color = theme.text.copy(alpha = 0.8f),
                                 fontSize = 16.sp,
+                                fontFamily = theme.font,
                                 modifier = Modifier.padding(end = 24.dp),
                                 style = shadowStyle(theme),
                             )
@@ -170,6 +180,7 @@ private fun Home(vm: LauncherViewModel, theme: LTheme) {
                                     "No apps under $l",
                                     color = theme.text.copy(alpha = 0.6f),
                                     fontSize = 20.sp,
+                                    fontFamily = theme.font,
                                     style = shadowStyle(theme),
                                 )
                             }
@@ -210,12 +221,46 @@ private fun Clock(theme: LTheme, modifier: Modifier) {
         }
     }
     val is24 = DateFormat.is24HourFormat(ctx)
-    val time = SimpleDateFormat(if (is24) "HH:mm" else "h:mm", Locale.getDefault()).format(Date(now))
-    val date = SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(Date(now))
+    val loc = Locale.getDefault()
+    val d = Date(now)
+    val time = SimpleDateFormat(if (is24) "HH:mm" else "h:mm", loc).format(d)
+    val battery = remember(now) { batteryPercent(ctx) }
+    val batt = if (battery >= 0) "  ·  $battery%" else ""
+    val sub = theme.text.copy(alpha = 0.85f)
     Column(modifier.padding(start = 28.dp, top = 28.dp)) {
-        Text(time, color = theme.text, fontSize = 80.sp, fontWeight = FontWeight.ExtraLight, style = shadowStyle(theme))
-        Text(date, color = theme.text.copy(alpha = 0.85f), fontSize = 17.sp, style = shadowStyle(theme))
+        when (theme.clock) {
+            ClockStyle.Classic -> {
+                val date = SimpleDateFormat("EEEE, MMM d", loc).format(d)
+                Text(
+                    time, color = theme.text, fontSize = 80.sp, fontWeight = FontWeight.ExtraLight,
+                    fontFamily = theme.clockFont, style = shadowStyle(theme),
+                )
+                Text(date, color = sub, fontSize = 17.sp, fontFamily = theme.font, style = shadowStyle(theme))
+            }
+            ClockStyle.Compact -> {
+                val date = SimpleDateFormat("EEE, MMM d", loc).format(d)
+                Text(
+                    time, color = theme.text, fontSize = 80.sp, fontWeight = FontWeight.Light,
+                    fontFamily = theme.clockFont, style = shadowStyle(theme),
+                )
+                Text(date + batt, color = sub, fontSize = 17.sp, fontFamily = theme.font, style = shadowStyle(theme))
+            }
+            ClockStyle.Day -> {
+                val day = SimpleDateFormat("EEE", loc).format(d).let { if (it.endsWith(".")) it else "$it." }
+                val date = SimpleDateFormat("MMM d", loc).format(d)
+                Text(day, color = theme.text, fontSize = 76.sp, fontFamily = theme.clockFont, style = shadowStyle(theme))
+                Text("$time  ·  $date$batt", color = sub, fontSize = 17.sp, fontFamily = theme.font, style = shadowStyle(theme))
+            }
+        }
     }
+}
+
+/** Battery level in percent, or -1 if the device doesn't report one. */
+private fun batteryPercent(ctx: Context): Int {
+    val i = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return -1
+    val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+    val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+    return if (level >= 0 && scale > 0) level * 100 / scale else -1
 }
 
 // ───────────────────────── Rail ─────────────────────────
@@ -337,6 +382,7 @@ private fun RailLetter(
             ch.toString(),
             color = if (selected) theme.accent else theme.text.copy(alpha = if (hasApps) 0.92f else 0.32f),
             fontSize = 12.sp,
+            fontFamily = theme.font,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         )
     }
@@ -370,13 +416,23 @@ private fun AppRow(app: AppInfo, vm: LauncherViewModel, theme: LTheme, inFavorit
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (vm.showIcons) {
-                Image(app.icon, null, Modifier.size(40.dp))
+                when (theme.icons) {
+                    IconStyle.App -> Image(app.icon, null, Modifier.size(40.dp))
+                    IconStyle.Circle -> Box(
+                        Modifier.size(40.dp).clip(CircleShape).background(theme.accent.copy(alpha = 0.30f)),
+                        contentAlignment = Alignment.Center,
+                    ) { Image(app.icon, null, Modifier.size(26.dp)) }
+                    IconStyle.Dot -> Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(theme.text.copy(alpha = 0.85f)))
+                    }
+                }
                 Spacer(Modifier.width(16.dp))
             }
             Text(
                 app.label,
                 color = theme.text,
                 fontSize = (32 * vm.textScale).sp,
+                fontFamily = theme.font,
                 fontWeight = FontWeight.Light,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -414,6 +470,7 @@ private fun BoxScope.SettingsPanel(vm: LauncherViewModel, themes: List<LTheme>, 
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(if (theme.light) Color(0xFFF6F7F9) else Color(0xFF181B20))
                 .pointerInput(Unit) { detectTapGestures { } } // taps on the panel shouldn't close it
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 22.dp, vertical = 20.dp),
         ) {
@@ -432,6 +489,10 @@ private fun BoxScope.SettingsPanel(vm: LauncherViewModel, themes: List<LTheme>, 
                 Text("Show app icons", color = ink, fontSize = 16.sp, modifier = Modifier.weight(1f))
                 Switch(checked = vm.showIcons, onCheckedChange = vm::setIcons)
             }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Theme background", color = ink, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Switch(checked = vm.backdrop, onCheckedChange = vm::setBackdrop)
+            }
             Spacer(Modifier.height(8.dp))
             Text("Text size", color = ink, fontSize = 16.sp)
             Slider(value = vm.textScale, onValueChange = vm::setScale, valueRange = 0.8f..1.3f)
@@ -449,7 +510,7 @@ private fun Swatch(t: LTheme, selected: Boolean, ink: Color, onClick: () -> Unit
             Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(t.scrim.copy(alpha = 1f), t.accent)))
+                .background(Brush.linearGradient(t.backdrop ?: listOf(t.scrim.copy(alpha = 1f), t.accent)))
                 .border(if (selected) 3.dp else 1.dp, if (selected) t.accent else ink.copy(alpha = 0.25f), CircleShape),
         )
         Spacer(Modifier.height(4.dp))

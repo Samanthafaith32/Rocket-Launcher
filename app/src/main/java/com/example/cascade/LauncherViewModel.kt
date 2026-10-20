@@ -34,6 +34,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     var showIcons by mutableStateOf(prefs.getBoolean("icons", true)); private set
     var textScale by mutableFloatStateOf(prefs.getFloat("scale", 1f)); private set
     var favVisible by mutableStateOf(prefs.getBoolean("favVisible", true)); private set
+    var backdrop by mutableStateOf(prefs.getBoolean("backdrop", true)); private set
 
     /** Ordered favourite ids. null = first run, defaults get filled in once apps load. */
     private var favIds by mutableStateOf(
@@ -120,6 +121,11 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun setScale(v: Float) {
         textScale = v
         prefs.edit().putFloat("scale", v).apply()
+    }
+
+    fun setBackdrop(v: Boolean) {
+        backdrop = v
+        prefs.edit().putBoolean("backdrop", v).apply()
     }
 
     // ---- favourites ----
