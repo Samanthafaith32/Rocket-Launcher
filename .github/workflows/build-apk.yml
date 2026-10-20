@@ -17,8 +17,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up the Android SDK
-        uses: android-actions/setup-android@v3
+      # No Android SDK step needed: the runner already includes the SDK with its
+      # licenses accepted, and Gradle downloads anything that is missing.
 
       # Installs Gradle 8.9 (the version in gradle-wrapper.properties), so the
       # build works even if gradlew / gradle-wrapper.jar are not in the repo.
