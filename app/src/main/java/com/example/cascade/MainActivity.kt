@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
-        setContent { PremiumLauncherApp(vm, window) }
+        setContent { LauncherApp(vm, window) }
     }
 
     /** Pressing the Home button while already on Home resets the screen. */
