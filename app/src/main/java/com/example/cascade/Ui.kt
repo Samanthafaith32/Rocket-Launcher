@@ -102,7 +102,7 @@ fun LauncherApp(vm: LauncherViewModel, window: Window) {
         }
         val dim by animateFloatAsState(dimTarget, tween(450), label = "dim")
         // Themes with a built-in gradient can paint it instead of the system wallpaper.
-        val backdrop = if (vm.backdrop) theme.backdrop else null
+        val backdrop = if (vm.showBackdrop) theme.backdrop else null
 
         Box(
             Modifier
@@ -491,7 +491,7 @@ private fun BoxScope.SettingsPanel(vm: LauncherViewModel, themes: List<LTheme>, 
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Theme background", color = ink, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                Switch(checked = vm.backdrop, onCheckedChange = vm::setBackdrop)
+                Switch(checked = vm.showBackdrop, onCheckedChange = vm::setBackdrop)
             }
             Spacer(Modifier.height(8.dp))
             Text("Text size", color = ink, fontSize = 16.sp)
